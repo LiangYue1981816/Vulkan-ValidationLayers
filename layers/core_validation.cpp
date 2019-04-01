@@ -380,7 +380,7 @@ void CoreChecks::AddMemObjInfo(void *object, const VkDeviceMemory mem, const VkM
 
 // Create binding link between given sampler and command buffer node
 void CoreChecks::AddCommandBufferBindingSampler(CMD_BUFFER_STATE *cb_node, SAMPLER_STATE *sampler_state) {
-    auto inserted = cb_node->object_bindings.insert({HandleToUint64(sampler_state->sampler), kVulkanObjectTypeSampler});
+    auto inserted = cb_node->object_bindings.insert(sampler_state->sampler);
     if (inserted.second) {
         // Only need to complete the cross-reference if this is a new item
         sampler_state->cb_bindings.insert(cb_node);
@@ -392,7 +392,7 @@ void CoreChecks::AddCommandBufferBindingImage(CMD_BUFFER_STATE *cb_node, IMAGE_S
     // Skip validation if this image was created through WSI
     if (image_state->binding.mem != MEMTRACKER_SWAP_CHAIN_IMAGE_KEY) {
         // First update cb binding for image
-        auto image_inserted = cb_node->object_bindings.insert({HandleToUint64(image_state->image), kVulkanObjectTypeImage});
+        auto image_inserted = cb_node->object_bindings.insert(image_state->image);
         if (image_inserted.second) {
             // Only need to continue if this is a new item (the rest of the work would have be done previous)
             image_state->cb_bindings.insert(cb_node);
@@ -415,7 +415,7 @@ void CoreChecks::AddCommandBufferBindingImage(CMD_BUFFER_STATE *cb_node, IMAGE_S
 // Create binding link between given image view node and its image with command buffer node
 void CoreChecks::AddCommandBufferBindingImageView(CMD_BUFFER_STATE *cb_node, IMAGE_VIEW_STATE *view_state) {
     // First add bindings for imageView
-    auto inserted = cb_node->object_bindings.insert({HandleToUint64(view_state->image_view), kVulkanObjectTypeImageView});
+    auto inserted = cb_node->object_bindings.insert(view_state->image_view);
     if (inserted.second) {
         // Only need to continue if this is a new item
         view_state->cb_bindings.insert(cb_node);
@@ -430,7 +430,7 @@ void CoreChecks::AddCommandBufferBindingImageView(CMD_BUFFER_STATE *cb_node, IMA
 // Create binding link between given buffer node and command buffer node
 void CoreChecks::AddCommandBufferBindingBuffer(CMD_BUFFER_STATE *cb_node, BUFFER_STATE *buffer_state) {
     // First update cb binding for buffer
-    auto buffer_inserted = cb_node->object_bindings.insert({HandleToUint64(buffer_state->buffer), kVulkanObjectTypeBuffer});
+    auto buffer_inserted = cb_node->object_bindings.insert(buffer_state->buffer);
     if (buffer_inserted.second) {
         // Only need to continue if this is a new item
         buffer_state->cb_bindings.insert(cb_node);
@@ -452,7 +452,7 @@ void CoreChecks::AddCommandBufferBindingBuffer(CMD_BUFFER_STATE *cb_node, BUFFER
 // Create binding link between given buffer view node and its buffer with command buffer node
 void CoreChecks::AddCommandBufferBindingBufferView(CMD_BUFFER_STATE *cb_node, BUFFER_VIEW_STATE *view_state) {
     // First add bindings for bufferView
-    auto inserted = cb_node->object_bindings.insert({HandleToUint64(view_state->buffer_view), kVulkanObjectTypeBufferView});
+    auto inserted = cb_node->object_bindings.insert(view_state->buffer_view);
     if (inserted.second) {
         // Only need to complete the cross-reference if this is a new item
         view_state->cb_bindings.insert(cb_node);
@@ -555,7 +555,7 @@ void CoreChecks::SetMemBinding(VkDeviceMemory mem, BINDABLE *mem_binding, VkDevi
     if (mem != VK_NULL_HANDLE) {
         DEVICE_MEMORY_STATE *mem_info = GetDevMemState(mem);
         if (mem_info) {
-            mem_info->obj_bindings.insert({handle, type});
+            mem_info->obj_bindings.insert(VulkanTypedHandle{handle, type});
             // For image objects, make sure default memory state is correctly set
             // TODO : What's the best/correct way to handle this?
             if (kVulkanObjectTypeImage == type) {
@@ -647,7 +647,7 @@ bool CoreChecks::SetSparseMemBinding(MEM_BINDING binding, uint64_t handle, Vulka
             assert(mem_binding->sparse);
             DEVICE_MEMORY_STATE *mem_info = GetDevMemState(binding.mem);
             if (mem_info) {
-                mem_info->obj_bindings.insert({handle, type});
+                mem_info->obj_bindings.insert(VulkanTypedHandle{handle, type});
                 // Need to set mem binding for this object
                 mem_binding->sparse_bindings.insert(binding);
                 mem_binding->UpdateBoundMemorySet();
