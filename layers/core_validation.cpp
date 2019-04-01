@@ -1956,7 +1956,7 @@ bool CoreChecks::ValidateCmdQueueFlags(const CMD_BUFFER_STATE *cb_node, const ch
     return false;
 }
 
-static char const *GetCauseStr(VK_OBJECT obj) {
+static char const *GetCauseStr(VulkanTypedHandle obj) {
     if (obj.type == kVulkanObjectTypeDescriptorSet) return "destroyed or updated";
     if (obj.type == kVulkanObjectTypeCommandBuffer) return "destroyed or rerecorded";
     return "destroyed";
@@ -2047,63 +2047,63 @@ bool CoreChecks::ValidateDeviceMaskToRenderPass(CMD_BUFFER_STATE *pCB, uint32_t 
 }
 
 // For given object struct return a ptr of BASE_NODE type for its wrapping struct
-BASE_NODE *CoreChecks::GetStateStructPtrFromObject(VK_OBJECT object_struct) {
+BASE_NODE *CoreChecks::GetStateStructPtrFromObject(const VulkanTypedHandle &object_struct) {
     BASE_NODE *base_ptr = nullptr;
     switch (object_struct.type) {
         case kVulkanObjectTypeDescriptorSet: {
-            base_ptr = GetSetNode(reinterpret_cast<VkDescriptorSet &>(object_struct.handle));
+            base_ptr = GetSetNode(object_struct.Cast<VkDescriptorSet>());
             break;
         }
         case kVulkanObjectTypeSampler: {
-            base_ptr = GetSamplerState(reinterpret_cast<VkSampler &>(object_struct.handle));
+            base_ptr = GetSamplerState(object_struct.Cast<VkSampler>());
             break;
         }
         case kVulkanObjectTypeQueryPool: {
-            base_ptr = GetQueryPoolState(reinterpret_cast<VkQueryPool &>(object_struct.handle));
+            base_ptr = GetQueryPoolState(object_struct.Cast<VkQueryPool>());
             break;
         }
         case kVulkanObjectTypePipeline: {
-            base_ptr = GetPipelineState(reinterpret_cast<VkPipeline &>(object_struct.handle));
+            base_ptr = GetPipelineState(object_struct.Cast<VkPipeline>());
             break;
         }
         case kVulkanObjectTypeBuffer: {
-            base_ptr = GetBufferState(reinterpret_cast<VkBuffer &>(object_struct.handle));
+            base_ptr = GetBufferState(object_struct.Cast<VkBuffer>());
             break;
         }
         case kVulkanObjectTypeBufferView: {
-            base_ptr = GetBufferViewState(reinterpret_cast<VkBufferView &>(object_struct.handle));
+            base_ptr = GetBufferViewState(object_struct.Cast<VkBufferView>());
             break;
         }
         case kVulkanObjectTypeImage: {
-            base_ptr = GetImageState(reinterpret_cast<VkImage &>(object_struct.handle));
+            base_ptr = GetImageState(object_struct.Cast<VkImage>());
             break;
         }
         case kVulkanObjectTypeImageView: {
-            base_ptr = GetImageViewState(reinterpret_cast<VkImageView &>(object_struct.handle));
+            base_ptr = GetImageViewState(object_struct.Cast<VkImageView>());
             break;
         }
         case kVulkanObjectTypeEvent: {
-            base_ptr = GetEventState(reinterpret_cast<VkEvent &>(object_struct.handle));
+            base_ptr = GetEventState(object_struct.Cast<VkEvent>());
             break;
         }
         case kVulkanObjectTypeDescriptorPool: {
-            base_ptr = GetDescriptorPoolState(reinterpret_cast<VkDescriptorPool &>(object_struct.handle));
+            base_ptr = GetDescriptorPoolState(object_struct.Cast<VkDescriptorPool>());
             break;
         }
         case kVulkanObjectTypeCommandPool: {
-            base_ptr = GetCommandPoolState(reinterpret_cast<VkCommandPool &>(object_struct.handle));
+            base_ptr = GetCommandPoolState(object_struct.Cast<VkCommandPool>());
             break;
         }
         case kVulkanObjectTypeFramebuffer: {
-            base_ptr = GetFramebufferState(reinterpret_cast<VkFramebuffer &>(object_struct.handle));
+            base_ptr = GetFramebufferState(object_struct.Cast<VkFramebuffer>());
             break;
         }
         case kVulkanObjectTypeRenderPass: {
-            base_ptr = GetRenderPassState(reinterpret_cast<VkRenderPass &>(object_struct.handle));
+            base_ptr = GetRenderPassState(object_struct.Cast<VkRenderPass>());
             break;
         }
         case kVulkanObjectTypeDeviceMemory: {
-            base_ptr = GetDevMemState(reinterpret_cast<VkDeviceMemory &>(object_struct.handle));
+            base_ptr = GetDevMemState(object_struct.Cast<VkDeviceMemory>());
             break;
         }
         default:
@@ -2114,16 +2114,17 @@ BASE_NODE *CoreChecks::GetStateStructPtrFromObject(VK_OBJECT object_struct) {
     return base_ptr;
 }
 
-// Tie the VK_OBJECT to the cmd buffer which includes:
+// Tie the VulkanTypedHandle to the cmd buffer which includes:
 //  Add object_binding to cmd buffer
 //  Add cb_binding to object
-static void AddCommandBufferBinding(std::unordered_set<CMD_BUFFER_STATE *> *cb_bindings, VK_OBJECT obj, CMD_BUFFER_STATE *cb_node) {
+static void AddCommandBufferBinding(std::unordered_set<CMD_BUFFER_STATE *> *cb_bindings, const VulkanTypedHandle &obj,
+                                    CMD_BUFFER_STATE *cb_node) {
     cb_bindings->insert(cb_node);
     cb_node->object_bindings.insert(obj);
 }
 // For a given object, if cb_node is in that objects cb_bindings, remove cb_node
-void CoreChecks::RemoveCommandBufferBinding(VK_OBJECT const *object, CMD_BUFFER_STATE *cb_node) {
-    BASE_NODE *base_obj = GetStateStructPtrFromObject(*object);
+void CoreChecks::RemoveCommandBufferBinding(VulkanTypedHandle const &object, CMD_BUFFER_STATE *cb_node) {
+    BASE_NODE *base_obj = GetStateStructPtrFromObject(object);
     if (base_obj) base_obj->cb_bindings.erase(cb_node);
 }
 // Reset the command buffer state
@@ -2186,8 +2187,8 @@ void CoreChecks::ResetCommandBufferState(const VkCommandBuffer cb) {
         pCB->queryUpdates.clear();
 
         // Remove object bindings
-        for (auto obj : pCB->object_bindings) {
-            RemoveCommandBufferBinding(&obj, pCB);
+        for (const auto &obj : pCB->object_bindings) {
+            RemoveCommandBufferBinding(obj, pCB);
         }
         pCB->object_bindings.clear();
         // Remove this cmdBuffer's reference from each FrameBuffer's CB ref list
@@ -2890,7 +2891,7 @@ bool CoreChecks::ValidateResources(CMD_BUFFER_STATE *cb_node) {
 }
 
 // Check that the queue family index of 'queue' matches one of the entries in pQueueFamilyIndices
-bool CoreChecks::ValidImageBufferQueue(CMD_BUFFER_STATE *cb_node, const VK_OBJECT &object, VkQueue queue, uint32_t count,
+bool CoreChecks::ValidImageBufferQueue(CMD_BUFFER_STATE *cb_node, const VulkanTypedHandle &object, VkQueue queue, uint32_t count,
                                        const uint32_t *indices) {
     bool found = false;
     bool skip = false;
@@ -3748,7 +3749,7 @@ void CoreChecks::PostCallRecordAllocateMemory(VkDevice device, const VkMemoryAll
 }
 
 // For given obj node, if it is use, flag a validation error and return callback result, else return false
-bool CoreChecks::ValidateObjectNotInUse(BASE_NODE *obj_node, const VK_OBJECT &obj_struct, const char *caller_name,
+bool CoreChecks::ValidateObjectNotInUse(BASE_NODE *obj_node, const VulkanTypedHandle &obj_struct, const char *caller_name,
                                         const char *error_code) {
     if (disabled.object_in_use) return false;
     bool skip = false;
@@ -3762,7 +3763,7 @@ bool CoreChecks::ValidateObjectNotInUse(BASE_NODE *obj_node, const VK_OBJECT &ob
 
 bool CoreChecks::PreCallValidateFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks *pAllocator) {
     DEVICE_MEMORY_STATE *mem_info = GetDevMemState(mem);
-    VK_OBJECT obj_struct(mem);
+    VulkanTypedHandle obj_struct(mem);
     bool skip = false;
     if (mem_info) {
         skip |= ValidateObjectNotInUse(mem_info, obj_struct, "vkFreeMemory", "VUID-vkFreeMemory-memory-00677");
@@ -3773,7 +3774,7 @@ bool CoreChecks::PreCallValidateFreeMemory(VkDevice device, VkDeviceMemory mem, 
 void CoreChecks::PreCallRecordFreeMemory(VkDevice device, VkDeviceMemory mem, const VkAllocationCallbacks *pAllocator) {
     if (!mem) return;
     DEVICE_MEMORY_STATE *mem_info = GetDevMemState(mem);
-    VK_OBJECT obj_struct(mem);
+    VulkanTypedHandle obj_struct(mem);
 
     // Clear mem binding for any bound objects
     for (const auto &obj : mem_info->obj_bindings) {
@@ -4047,7 +4048,7 @@ void CoreChecks::PreCallRecordDestroyFence(VkDevice device, VkFence fence, const
 
 bool CoreChecks::PreCallValidateDestroySemaphore(VkDevice device, VkSemaphore semaphore, const VkAllocationCallbacks *pAllocator) {
     SEMAPHORE_STATE *sema_node = GetSemaphoreState(semaphore);
-    VK_OBJECT obj_struct(semaphore);
+    VulkanTypedHandle obj_struct(semaphore);
     bool skip = false;
     if (sema_node) {
         skip |= ValidateObjectNotInUse(sema_node, obj_struct, "vkDestroySemaphore", "VUID-vkDestroySemaphore-semaphore-01137");
@@ -4062,7 +4063,7 @@ void CoreChecks::PreCallRecordDestroySemaphore(VkDevice device, VkSemaphore sema
 
 bool CoreChecks::PreCallValidateDestroyEvent(VkDevice device, VkEvent event, const VkAllocationCallbacks *pAllocator) {
     EVENT_STATE *event_state = GetEventState(event);
-    VK_OBJECT obj_struct(event);
+    VulkanTypedHandle obj_struct(event);
     bool skip = false;
     if (event_state) {
         skip |= ValidateObjectNotInUse(event_state, obj_struct, "vkDestroyEvent", "VUID-vkDestroyEvent-event-01145");
@@ -4073,7 +4074,7 @@ bool CoreChecks::PreCallValidateDestroyEvent(VkDevice device, VkEvent event, con
 void CoreChecks::PreCallRecordDestroyEvent(VkDevice device, VkEvent event, const VkAllocationCallbacks *pAllocator) {
     if (!event) return;
     EVENT_STATE *event_state = GetEventState(event);
-    VK_OBJECT obj_struct(event);
+    VulkanTypedHandle obj_struct(event);
     InvalidateCommandBuffers(event_state->cb_bindings, obj_struct);
     eventMap.erase(event);
 }
@@ -4081,7 +4082,7 @@ void CoreChecks::PreCallRecordDestroyEvent(VkDevice device, VkEvent event, const
 bool CoreChecks::PreCallValidateDestroyQueryPool(VkDevice device, VkQueryPool queryPool, const VkAllocationCallbacks *pAllocator) {
     if (disabled.query_validation) return false;
     QUERY_POOL_STATE *qp_state = GetQueryPoolState(queryPool);
-    VK_OBJECT obj_struct(queryPool);
+    VulkanTypedHandle obj_struct(queryPool);
     bool skip = false;
     if (qp_state) {
         skip |= ValidateObjectNotInUse(qp_state, obj_struct, "vkDestroyQueryPool", "VUID-vkDestroyQueryPool-queryPool-00793");
@@ -4092,7 +4093,7 @@ bool CoreChecks::PreCallValidateDestroyQueryPool(VkDevice device, VkQueryPool qu
 void CoreChecks::PreCallRecordDestroyQueryPool(VkDevice device, VkQueryPool queryPool, const VkAllocationCallbacks *pAllocator) {
     if (!queryPool) return;
     QUERY_POOL_STATE *qp_state = GetQueryPoolState(queryPool);
-    VK_OBJECT obj_struct(queryPool);
+    VulkanTypedHandle obj_struct(queryPool);
     InvalidateCommandBuffers(qp_state->cb_bindings, obj_struct);
     queryPoolMap.erase(queryPool);
 }
@@ -4345,7 +4346,7 @@ bool CoreChecks::ValidateBindBufferMemory(VkBuffer buffer, VkDeviceMemory mem, V
     if (buffer_state) {
         // Track objects tied to memory
         uint64_t buffer_handle = HandleToUint64(buffer);
-        VK_OBJECT obj_struct(buffer);
+        VulkanTypedHandle obj_struct(buffer);
         skip = ValidateSetMemBinding(mem, obj_struct, api_name);
         if (!buffer_state->memory_requirements_checked) {
             // There's not an explicit requirement in the spec to call vkGetBufferMemoryRequirements() prior to calling
@@ -4603,7 +4604,7 @@ void CoreChecks::PreCallRecordDestroyShaderModule(VkDevice device, VkShaderModul
 
 bool CoreChecks::PreCallValidateDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks *pAllocator) {
     PIPELINE_STATE *pipeline_state = GetPipelineState(pipeline);
-    VK_OBJECT obj_struct(pipeline);
+    VulkanTypedHandle obj_struct(pipeline);
     bool skip = false;
     if (pipeline_state) {
         skip |= ValidateObjectNotInUse(pipeline_state, obj_struct, "vkDestroyPipeline", "VUID-vkDestroyPipeline-pipeline-00765");
@@ -4614,7 +4615,7 @@ bool CoreChecks::PreCallValidateDestroyPipeline(VkDevice device, VkPipeline pipe
 void CoreChecks::PreCallRecordDestroyPipeline(VkDevice device, VkPipeline pipeline, const VkAllocationCallbacks *pAllocator) {
     if (!pipeline) return;
     PIPELINE_STATE *pipeline_state = GetPipelineState(pipeline);
-    VK_OBJECT obj_struct(pipeline);
+    VulkanTypedHandle obj_struct(pipeline);
     // Any bound cmd buffers are now invalid
     InvalidateCommandBuffers(pipeline_state->cb_bindings, obj_struct);
     if (enabled.gpu_validation) {
@@ -4631,7 +4632,7 @@ void CoreChecks::PreCallRecordDestroyPipelineLayout(VkDevice device, VkPipelineL
 
 bool CoreChecks::PreCallValidateDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCallbacks *pAllocator) {
     SAMPLER_STATE *sampler_state = GetSamplerState(sampler);
-    VK_OBJECT obj_struct(sampler);
+    VulkanTypedHandle obj_struct(sampler);
     bool skip = false;
     if (sampler_state) {
         skip |= ValidateObjectNotInUse(sampler_state, obj_struct, "vkDestroySampler", "VUID-vkDestroySampler-sampler-01082");
@@ -4642,7 +4643,7 @@ bool CoreChecks::PreCallValidateDestroySampler(VkDevice device, VkSampler sample
 void CoreChecks::PreCallRecordDestroySampler(VkDevice device, VkSampler sampler, const VkAllocationCallbacks *pAllocator) {
     if (!sampler) return;
     SAMPLER_STATE *sampler_state = GetSamplerState(sampler);
-    VK_OBJECT obj_struct(sampler);
+    VulkanTypedHandle obj_struct(sampler);
     // Any bound cmd buffers are now invalid
     if (sampler_state) {
         InvalidateCommandBuffers(sampler_state->cb_bindings, obj_struct);
@@ -4663,7 +4664,7 @@ void CoreChecks::PreCallRecordDestroyDescriptorSetLayout(VkDevice device, VkDesc
 bool CoreChecks::PreCallValidateDestroyDescriptorPool(VkDevice device, VkDescriptorPool descriptorPool,
                                                       const VkAllocationCallbacks *pAllocator) {
     DESCRIPTOR_POOL_STATE *desc_pool_state = GetDescriptorPoolState(descriptorPool);
-    VK_OBJECT obj_struct(descriptorPool);
+    VulkanTypedHandle obj_struct(descriptorPool);
     bool skip = false;
     if (desc_pool_state) {
         skip |= ValidateObjectNotInUse(desc_pool_state, obj_struct, "vkDestroyDescriptorPool",
@@ -4676,7 +4677,7 @@ void CoreChecks::PreCallRecordDestroyDescriptorPool(VkDevice device, VkDescripto
                                                     const VkAllocationCallbacks *pAllocator) {
     if (!descriptorPool) return;
     DESCRIPTOR_POOL_STATE *desc_pool_state = GetDescriptorPoolState(descriptorPool);
-    VK_OBJECT obj_struct(descriptorPool);
+    VulkanTypedHandle obj_struct(descriptorPool);
     if (desc_pool_state) {
         // Any bound cmd buffers are now invalid
         InvalidateCommandBuffers(desc_pool_state->cb_bindings, obj_struct);
@@ -4856,7 +4857,7 @@ void CoreChecks::PostCallRecordResetFences(VkDevice device, uint32_t fenceCount,
 }
 
 // For given cb_nodes, invalidate them and track object causing invalidation
-void CoreChecks::InvalidateCommandBuffers(std::unordered_set<CMD_BUFFER_STATE *> const &cb_nodes, VK_OBJECT obj) {
+void CoreChecks::InvalidateCommandBuffers(std::unordered_set<CMD_BUFFER_STATE *> const &cb_nodes, const VulkanTypedHandle &obj) {
     for (auto cb_node : cb_nodes) {
         if (cb_node->state == CB_RECORDING) {
             log_msg(report_data, VK_DEBUG_REPORT_WARNING_BIT_EXT, VK_DEBUG_REPORT_OBJECT_TYPE_COMMAND_BUFFER_EXT,
@@ -4879,7 +4880,7 @@ void CoreChecks::InvalidateCommandBuffers(std::unordered_set<CMD_BUFFER_STATE *>
 bool CoreChecks::PreCallValidateDestroyFramebuffer(VkDevice device, VkFramebuffer framebuffer,
                                                    const VkAllocationCallbacks *pAllocator) {
     FRAMEBUFFER_STATE *framebuffer_state = GetFramebufferState(framebuffer);
-    VK_OBJECT obj_struct(framebuffer);
+    VulkanTypedHandle obj_struct(framebuffer);
     bool skip = false;
     if (framebuffer_state) {
         skip |= ValidateObjectNotInUse(framebuffer_state, obj_struct, "vkDestroyFramebuffer",
@@ -4892,7 +4893,7 @@ void CoreChecks::PreCallRecordDestroyFramebuffer(VkDevice device, VkFramebuffer 
                                                  const VkAllocationCallbacks *pAllocator) {
     if (!framebuffer) return;
     FRAMEBUFFER_STATE *framebuffer_state = GetFramebufferState(framebuffer);
-    VK_OBJECT obj_struct(framebuffer);
+    VulkanTypedHandle obj_struct(framebuffer);
     InvalidateCommandBuffers(framebuffer_state->cb_bindings, obj_struct);
     frameBufferMap.erase(framebuffer);
 }
@@ -4900,7 +4901,7 @@ void CoreChecks::PreCallRecordDestroyFramebuffer(VkDevice device, VkFramebuffer 
 bool CoreChecks::PreCallValidateDestroyRenderPass(VkDevice device, VkRenderPass renderPass,
                                                   const VkAllocationCallbacks *pAllocator) {
     RENDER_PASS_STATE *rp_state = GetRenderPassState(renderPass);
-    VK_OBJECT obj_struct(renderPass);
+    VulkanTypedHandle obj_struct(renderPass);
     bool skip = false;
     if (rp_state) {
         skip |= ValidateObjectNotInUse(rp_state, obj_struct, "vkDestroyRenderPass", "VUID-vkDestroyRenderPass-renderPass-00873");
@@ -4911,7 +4912,7 @@ bool CoreChecks::PreCallValidateDestroyRenderPass(VkDevice device, VkRenderPass 
 void CoreChecks::PreCallRecordDestroyRenderPass(VkDevice device, VkRenderPass renderPass, const VkAllocationCallbacks *pAllocator) {
     if (!renderPass) return;
     RENDER_PASS_STATE *rp_state = GetRenderPassState(renderPass);
-    VK_OBJECT obj_struct(renderPass);
+    VulkanTypedHandle obj_struct(renderPass);
     InvalidateCommandBuffers(rp_state->cb_bindings, obj_struct);
     renderPassMap.erase(renderPass);
 }
@@ -10970,7 +10971,7 @@ bool CoreChecks::ValidateImportSemaphore(VkSemaphore semaphore, const char *call
     bool skip = false;
     SEMAPHORE_STATE *sema_node = GetSemaphoreState(semaphore);
     if (sema_node) {
-        VK_OBJECT obj_struct(semaphore);
+        VulkanTypedHandle obj_struct(semaphore);
         skip |= ValidateObjectNotInUse(sema_node, obj_struct, caller_name, kVUIDUndefined);
     }
     return skip;
