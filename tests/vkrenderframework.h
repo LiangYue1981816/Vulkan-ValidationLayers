@@ -439,6 +439,10 @@ class VkPipelineLayoutObj : public vk_testing::PipelineLayout {
 class VkPipelineObj : public vk_testing::Pipeline {
    public:
     VkPipelineObj(VkDeviceObj *device);
+
+    static const char bindStateVertShaderText[];
+    static const char bindStateFragShaderText[];
+
     void AddShader(VkShaderObj *shaderObj);
     void AddShader(VkPipelineShaderStageCreateInfo const &createInfo);
     void AddVertexInputAttribs(VkVertexInputAttributeDescription *vi_attrib, uint32_t count);

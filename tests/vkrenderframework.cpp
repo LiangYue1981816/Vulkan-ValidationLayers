@@ -1594,6 +1594,24 @@ VkPipelineObj::VkPipelineObj(VkDeviceObj *device) {
     memset(&m_pd_state, 0, sizeof(m_pd_state));
 }
 
+const char VkPipelineObj::bindStateVertShaderText[] =
+    "#version 450\n"
+    "vec2 vertices[3];\n"
+    "void main() {\n"
+    "      vertices[0] = vec2(-1.0, -1.0);\n"
+    "      vertices[1] = vec2( 1.0, -1.0);\n"
+    "      vertices[2] = vec2( 0.0,  1.0);\n"
+    "   gl_Position = vec4(vertices[gl_VertexIndex % 3], 0.0, 1.0);\n"
+    "}\n";
+
+const char VkPipelineObj::bindStateFragShaderText[] =
+    "#version 450\n"
+    "\n"
+    "layout(location = 0) out vec4 uFragColor;\n"
+    "void main(){\n"
+    "   uFragColor = vec4(0,1,0,1);\n"
+    "}\n";
+
 void VkPipelineObj::AddShader(VkShaderObj *shader) { m_shaderStages.push_back(shader->GetStageCreateInfo()); }
 
 void VkPipelineObj::AddShader(VkPipelineShaderStageCreateInfo const &createInfo) { m_shaderStages.push_back(createInfo); }
